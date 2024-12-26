@@ -100,15 +100,15 @@ if st.button("제목 생성하기", type="primary"):
 
 
 
-from google.oauth2.service_account import Credentials
-import gspread
+# from google.oauth2.service_account import Credentials
+# import gspread
 
 # on = st.toggle("해당 서비스 설명[필참]")
 
 
 
 
-on = st.toggle("[필참]꼭 반드시 읽어주세요.")
+on = st.toggle("[필독]꼭 반드시 읽어주세요.")
 if on:
     text="""
     반갑습니다. 블로그 대행사 마케튜드입니다.
