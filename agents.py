@@ -16,6 +16,14 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
 from typing import Literal
+from langchain_core.messages import HumanMessage
+from langchain_core.messages import BaseMessage
+from langgraph.graph import END, StateGraph, START
+from langgraph.prebuilt import create_react_agent
+from typing import Sequence, TypedDict, Annotated
+import functools
+import operator
+
 
 from typing import List, Dict
 import json
@@ -23,6 +31,7 @@ import os
 
 import requests
 from bs4 import BeautifulSoup
+
 
 def agents(keyword:str, num_titles:int, api_key:str ):
     os.environ['OPENAI_API_KEY'] = api_key
@@ -203,14 +212,6 @@ def agents(keyword:str, num_titles:int, api_key:str ):
         )
         return supervisor_chain.invoke(state)
 
-
-    from langchain_core.messages import HumanMessage
-    from langchain_core.messages import BaseMessage
-    from langgraph.graph import END, StateGraph, START
-    from langgraph.prebuilt import create_react_agent
-    from typing import Sequence, TypedDict, Annotated
-    import functools
-    import operator
 
 
     # 1. 상태 타입 정의
