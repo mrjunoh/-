@@ -1,4 +1,4 @@
-lanchain
+langchain
 openai
 streamlit
 requests
