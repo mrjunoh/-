@@ -14,6 +14,7 @@ from selenium.webdriver.common.keys import Keys
 
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_openai import ChatOpenAI
+
 from pydantic import BaseModel
 from typing import Literal
 from langchain_core.messages import HumanMessage
@@ -160,15 +161,15 @@ def agents(keyword:str, num_titles:int, api_key:str ):
     system_prompt = (
         "You are a supervisor tasked with managing a conversation between the"
         " following workers: {members}. Your task is to coordinate the process of:"
-        " 1) Searching titles from Naver"
-        " 2) Extracting common keywords from titles"
-        " 3) Getting auto-complete keywords"
-        " 4) Generating optimized titles"
-        " Given the following user request, respond with the worker to act next."
-        " Each worker will perform a task and respond with their results and status."
+        " 1) Title_Searcher - Execute ONCE to get titles"
+        " 2) Keyword_Extractor - Analyze the titles from step 1"
+        " 3) AutoComplete_Searcher - Execute ONCE to get suggestions"
+        " 4) Title_Generator - Create final titles"
+        " Title_Searcher and AutoComplete_Searcher MUST be executed exactly once."
+        " Title_Searcher and AutoComplete_Searcher  Never call them again after their first execution."
         " When finished, respond with FINISH."
-        "Instructions: Do steps '1) Searching titles from Naver' and '3) Getting auto-complete keywords' only once"
     )
+
 
     # 3. 옵션 정의
     options = ["FINISH"] + members
@@ -188,13 +189,14 @@ def agents(keyword:str, num_titles:int, api_key:str ):
                 "Given the conversation above, who should act next?"
                 " Or should we FINISH? Select one of: {options}"
                 "\nOrder of operations:"
-                "\n1. Title_Searcher first to get titles"
-                "\n2. Keyword_Extractor to analyze titles"
-                "\n3. AutoComplete_Searcher to get suggestions"
-                "\n4. Title_Generator to create final titles"
+                "\n1. Title_Searcher MUST BE EXECUTED EXACTLY ONCE to get titles"
+                "\n2. Keyword_Extractor to analyze titles (can be called multiple times if needed)"
+                "\n3. AutoComplete_Searcher MUST BE EXECUTED EXACTLY ONCE to get suggestions"
+                "\n4. Title_Generator to create final titles (can be called multiple times if needed)"
+                "\nNEVER call Title_Searcher or AutoComplete_Searcher more than once."
                 "\nFINISH when all steps are complete."
-                "\nInstructions: Do steps '1) Searching titles from Naver' and '3) Getting auto-complete keywords' only once"
-                ,
+                "\nIMPORTANT: Check the conversation history - if Title_Searcher or AutoComplete_Searcher"
+                " have already been executed once, NEVER call them again."
             ),
         ]
     ).partial(options=str(options), members=", ".join(members))
@@ -203,6 +205,7 @@ def agents(keyword:str, num_titles:int, api_key:str ):
     llm_supervision = ChatOpenAI(model='gpt-4o',temperature=0)
     llm = ChatOpenAI(model='gpt-4o')
     llm_tool = ChatOpenAI(model='gpt-4o-mini',temperature=0)
+    llm_tool_search = ChatOpenAI(model='gpt-3.5-turbo',temperature=0)
 
     # 7. Supervisor 함수 정의
     def supervisor_agent(state):
@@ -227,10 +230,13 @@ def agents(keyword:str, num_titles:int, api_key:str ):
 
     # 3. Title Searcher 에이전트 생성
     title_searcher_prompt = """You are a title search specialist who uses Naver search to find relevant titles.
-    Your task is to search for titles related to the given keyword and return the results.
-    Always use the search_tool for getting titles from Naver."""
+Your task is to search for titles related to the given keyword and return the results.
+IMPORTANT: You must execute the search_tool EXACTLY ONCE and return the results immediately.
+Do not attempt multiple searches or refinements.
+Always use the search_tool for getting titles from Naver, and return the results from that single execution.
+"""
     title_searcher = create_react_agent(
-        llm_tool,
+        llm_tool_search,
         tools=[search_tool],  # 앞서 정의한 custom tool
         state_modifier=title_searcher_prompt
     )
@@ -290,28 +296,41 @@ Get auto-complete suggestions for the given keyword from Naver using the auto_se
 
 SEARCH STRATEGY:
 1. First try with the full original keyword
-2. If no auto-complete results found, break down the keyword into meaningful parts and search each part:
-   - For compound keywords (e.g., '부가세 세무사'), try each part separately ('부가세', '세무사')
-   - For business terms, consider related terms
-   - For specific topics, try broader category terms
+2. If no auto-complete results found, identify and use the MAIN KEYWORD:
+  - For compound keywords, focus on the main subject/topic
+  - Avoid searching generic terms that dilute the core meaning
 
 WORKFLOW:
 1. Try the original full keyword first
 2. If no results:
-   - Split the keyword intelligently
-   - Search each part separately
-   - Combine and return all unique suggestions
+  - Identify the main keyword (core topic)
+  - Search using the main keyword only
+  - Avoid searching generic/auxiliary terms
 
 OUTPUT FORMAT:
 Always return the results in an organized list, indicating which keyword was used for each suggestion.
 
 EXAMPLES:
-- Input: "부가세 세무사" (no results)
-  Action: Search separately for "부가세" and "세무사"
-- Input: "주식 투자 초보" (no results)
-  Action: Try "주식", "투자", "주식투자"
+1. Input: "부가세 세무사" (no results)
+  - Main keyword: "세무사" (core profession)
+  - Search for: "세무사"
+  - Avoid: searching "부가세" separately as it's a subtopic
 
-Remember: The goal is to never return empty results if meaningful sub-keywords exist."""
+2. Input: "파이썬 공부" (no results)
+  - Main keyword: "파이썬" (core subject)
+  - Search for: "파이썬"
+  - Avoid: searching "공부" separately as it's a generic term
+
+3. Input: "주식투자 초보" (no results)
+  - Main keyword: "주식투자" (core topic)
+  - Search for: "주식투자"
+  - Avoid: searching "초보" separately as it's a descriptor
+
+Remember: 
+- Focus on the main subject/topic
+- Avoid diluting results with generic terms
+- The goal is to get relevant suggestions that maintain focus on the core topic"""
+
 
 
     auto_complete_searcher = create_react_agent(
@@ -405,6 +424,7 @@ Remember: The goal is to never return empty results if meaningful sub-keywords e
 
     # 5. 그래프 컴파일
     return workflow.compile()
+#workflow.compile(max_iterations=1)
 
     # #종 결과만 보기
     # print("\n=== 최종 결과 ===")
