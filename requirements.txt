@@ -6,3 +6,4 @@ requests
 selenium
 chromedriver-autoinstaller
 langgraph
+bs4
