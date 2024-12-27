@@ -237,4 +237,13 @@ if st.session_state.generated_titles and not st.button:  # 버튼을 누르지 �
             st.markdown(f"- {title}")
 
 st.markdown("---")
+text = """
+홈페이지: https://market-tude.com/
+\n블로그: https://blog.naver.com/market-tude
+\n인스타: https://www.instagram.com/marketing_tude22/
+\n스레드: https://www.threads.net/@marketing_tude22?hl=ko
+"""
+st.markdown(text)
+
+st.markdown("---")
 st.caption("Made by MARKETtude")
